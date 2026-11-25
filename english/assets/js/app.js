@@ -217,8 +217,8 @@
         '<div><b>' + answered + '</b><span>已作答</span></div>' +
         '<div><b>' + correct + '</b><span>答对</span></div>' +
         '<div><b>' + due + '</b><span>待复习</span></div></div></section>' +
-      '<div class="cet-grid"><div class="cet-card"><div class="eyebrow">CURRENT SET</div><h2>2025.06 四级第一套</h2>' +
-        '<p class="muted" style="font-size:13px">先把一套卷跑通：作文 → 听力 → 选词 → 匹配 → 阅读 → 翻译。2025.06 听力音频已接入；选词、阅读答案键可提交判分。</p>' +
+      '<div class="cet-grid"><div class="cet-card"><div class="eyebrow">CURRENT SET</div><h2>' + esc(exam.title) + '</h2>' +
+        '<p class="muted" style="font-size:13px">先把一套卷跑通：作文 → 听力 → 选词 → 匹配 → 阅读 → 翻译。' + (exam.listening.audio ? '听力音频已接入；' : '听力音频待接入；') + '选词、阅读答案键可提交判分。</p>' +
         '<div class="exam-card" style="margin-top:14px"><div><h3>' + esc(exam.title) + '</h3><div class="meta">' + esc(exam.source) + '</div></div>' +
         '<a class="btn primary" href="#/exam/' + exam.id + '">开始这套 →</a></div>' +
         '<div class="tiny muted">提示：听力题干在音频中播放；卷面只给选项，先完整听一遍再作答。</div></div>' +
@@ -226,7 +226,7 @@
         '<div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">' +
         guides.map(function (g) { return '<a href="#/guides?focus=' + g[0] + '" style="display:flex;justify-content:space-between;gap:10px;text-decoration:none;padding:9px 10px;border:1px solid var(--line);border-radius:9px;color:var(--ink);font-size:13.5px"><span><b>' + g[1] + '</b> <span class="muted">' + g[2] + '</span></span><span>›</span></a>'; }).join('') +
         '</div><div class="divider"></div><a class="btn sm" href="../">回学习台制定计划 →</a></div></div>' +
-      '<div class="section-head"><div><div class="eyebrow">SAMPLE EXAM</div><h2>样卷结构</h2></div><span class="tiny muted">2025.06 · CET-4 · Set 1</span></div>' +
+      '<div class="section-head"><div><div class="eyebrow">SAMPLE EXAM</div><h2>样卷结构</h2></div><span class="tiny muted">' + exam.year + '.' + String(exam.month).padStart(2, '0') + ' · ' + exam.level + ' · Set ' + exam.set + '</span></div>' +
       '<div class="guide-grid">' +
         ['作文 · 30 分钟', '听力 · 25 分钟', '选词填空', '长篇匹配', '仔细阅读', '翻译 · 30 分钟'].map(function (x, i) {
           return '<div class="guide-card"><h3>' + x + '</h3><p>' + ['观点类作文，120–180 词', '新闻/长对话/短文，25 题', '10 空，15 选 10', '10 题，A–M 段落', '两篇，10 题', '中国文化/社会话题'][i] + '</p><a class="btn sm ghost" href="#/exam/' + exam.id + '?sec=' + ['writing','listening','cloze','matching','reading','translation'][i] + '">打开 →</a></div>';
@@ -332,13 +332,17 @@
   }
 
   function sectionMatching(exam) {
-    var letters = 'ABCDEFGHIJKLM'.split('').map(function (x) { return '<option value="' + x + '">' + x + '</option>'; }).join('');
+    var letters = 'ABCDEFGHIJKLMNO'.split('').map(function (x) { return '<option value="' + x + '">' + x + '</option>'; }).join('');
+    var paras = exam.matching.paragraphs || {};
+    var pk = Object.keys(paras).sort();
+    var paraHtml = pk.length ? '<details class="para-box"><summary>展开 ' + pk.length + ' 个段落（A–' + pk[pk.length - 1] + '）</summary>' +
+      pk.map(function (k) { return '<p><b>' + k + ')</b> ' + esc(paras[k]) + '</p>'; }).join('') + '</details>' : '';
     return '<div class="cet-card"><div class="section-title">Part III · Section B · 长篇阅读匹配</div>' +
-      '<p class="tiny muted">' + esc(exam.matching.note || '') + '</p>' +
+      '<p class="tiny muted">' + esc(exam.matching.note || '') + '</p>' + paraHtml +
       exam.matching.statements.map(function (s) {
         return '<div class="match-row"><div class="txt"><b>' + s.n + '.</b> ' + esc(s.text) + '</div><select class="match-select" data-q="' + exam.id + '|M-' + s.n + '"><option value="">—</option>' + letters + '</select></div>';
       }).join('') +
-      '<div class="exam-actions"><button class="btn primary" data-grade="matching">提交本节</button><span class="tiny muted">7 题 · 段落可重复</span></div><div id="gradeResult"></div></div>';
+      '<div class="exam-actions"><button class="btn primary" data-grade="matching">提交本节</button><span class="tiny muted">' + exam.matching.statements.length + ' 题 · 段落可重复</span></div><div id="gradeResult"></div></div>';
   }
 
   function sectionReading(exam) {

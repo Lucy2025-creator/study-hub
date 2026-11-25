@@ -1,5 +1,5 @@
 /* 学习台 PWA：缓存壳子与题库数据；音频按需联网，不进缓存 */
-const CACHE = 'studyhub-v1';
+const CACHE = 'studyhub-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -13,12 +13,9 @@ const ASSETS = [
   './english/index.html',
   './english/assets/css/english.css',
   './english/assets/js/app.js',
-  './english/data/sample.js',
-  './english/data/exams-2025-06.js',
-  './english/data/exams-2025-06-cet4-3.js',
-  './english/data/exams-2024-12.js',
-  './english/data/exams-2024-06.js',
-  './english/data/exams-2024-12-cet6.js'
+  './english/data/bank-cet4.js',
+  './english/data/bank-cet6.js',
+  './english/data/exams-2023-12.js'
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.allSettled(ASSETS.map(a => c.add(a)))).then(() => self.skipWaiting()));
