@@ -213,7 +213,7 @@
     return '<section class="cet-hero"><div class="eyebrow">CET-4 / CET-6 · 真题练习</div>' +
       '<h1>把真题，<em>做透</em>。</h1>' +
       '<p class="lede">四级为主，六级进阶。作文、听力、选词、匹配、阅读、翻译分开练；错题进本子，按艾宾浩斯回来。</p>' +
-      '<div class="cet-meta"><div><b>' + EXAMS.length + '</b><span>套真题（样卷）</span></div>' +
+      '<div class="cet-meta"><div><b>' + EXAMS.length + '</b><span>套真题</span></div>' +
         '<div><b>' + answered + '</b><span>已作答</span></div>' +
         '<div><b>' + correct + '</b><span>答对</span></div>' +
         '<div><b>' + due + '</b><span>待复习</span></div></div></section>' +
@@ -226,7 +226,7 @@
         '<div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">' +
         guides.map(function (g) { return '<a href="#/guides?focus=' + g[0] + '" style="display:flex;justify-content:space-between;gap:10px;text-decoration:none;padding:9px 10px;border:1px solid var(--line);border-radius:9px;color:var(--ink);font-size:13.5px"><span><b>' + g[1] + '</b> <span class="muted">' + g[2] + '</span></span><span>›</span></a>'; }).join('') +
         '</div><div class="divider"></div><a class="btn sm" href="../">回学习台制定计划 →</a></div></div>' +
-      '<div class="section-head"><div><div class="eyebrow">SAMPLE EXAM</div><h2>样卷结构</h2></div><span class="tiny muted">' + exam.year + '.' + String(exam.month).padStart(2, '0') + ' · ' + exam.level + ' · Set ' + exam.set + '</span></div>' +
+      '<div class="section-head"><div><div class="eyebrow">SELECTED SET</div><h2>套卷结构</h2></div><span class="tiny muted">' + exam.year + '.' + String(exam.month).padStart(2, '0') + ' · ' + exam.level + ' · Set ' + exam.set + '</span></div>' +
       '<div class="guide-grid">' +
         ['作文 · 30 分钟', '听力 · 25 分钟', '选词填空', '长篇匹配', '仔细阅读', '翻译 · 30 分钟'].map(function (x, i) {
           return '<div class="guide-card"><h3>' + x + '</h3><p>' + ['观点类作文，120–180 词', '新闻/长对话/短文，25 题', '10 空，15 选 10', '10 题，A–M 段落', '两篇，10 题', '中国文化/社会话题'][i] + '</p><a class="btn sm ghost" href="#/exam/' + exam.id + '?sec=' + ['writing','listening','cloze','matching','reading','translation'][i] + '">打开 →</a></div>';
@@ -422,7 +422,7 @@
   /* ---------- wrong / guides / stats ---------- */
   function viewWrong() {
     var keys = Object.keys(state.wrong);
-    if (!keys.length) return '<div class="page-head"><div><h1>错题本</h1><div class="sub">做错的题会自动进来</div></div></div><div class="empty"><div style="font-size:34px">∅</div><h3>还没有错题</h3><p>先去做一套样卷，错题会自动收进来。</p><a class="btn primary" href="#/exam/' + (EXAMS[0] ? EXAMS[0].id : '') + '">开始样卷 →</a></div>';
+    if (!keys.length) return '<div class="page-head"><div><h1>错题本</h1><div class="sub">做错的题会自动进来</div></div></div><div class="empty"><div style="font-size:34px">∅</div><h3>还没有错题</h3><p>先去做一套真题，错题会自动收进来。</p><a class="btn primary" href="#/exam/' + (EXAMS[0] ? EXAMS[0].id : '') + '">开始样卷 →</a></div>';
     return '<div class="page-head"><div><h1>错题本</h1><div class="sub">' + keys.length + ' 道 · 按最近错误排序</div></div></div><div class="cet-card">' +
       keys.sort(function (a, b) { return (state.wrong[b].at || 0) - (state.wrong[a].at || 0); }).map(function (k) {
         var w = state.wrong[k];
@@ -455,7 +455,7 @@
     return '<div class="page-head"><div><h1>统计</h1><div class="sub">先看趋势，不追求一次全对</div></div></div>' +
       '<div class="cet-grid"><div class="cet-card"><div class="eyebrow">OVERVIEW</div><h2>练习概览</h2>' +
       '<div class="cet-meta"><div><b>' + keys.length + '</b><span>已作答</span></div><div><b>' + correct + '</b><span>答对</span></div><div><b>' + (keys.length ? Math.round(correct * 100 / keys.length) + '%' : '—') + '</b><span>正确率</span></div><div><b>' + due.length + '</b><span>待复习</span></div></div>' +
-      '<p class="tiny muted" style="margin-top:14px">当前统计基于样卷；批量真题接入后会按套卷/题型/年份拆分。</p></div>' +
+      '<p class="tiny muted" style="margin-top:14px">当前统计覆盖题库全部套卷；可按题型、年份在题库里筛。</p></div>' +
       '<div class="cet-card"><div class="eyebrow">REVIEW</div><h2>艾宾浩斯</h2><p class="tiny muted">错题与答对题都会进入复习队列：1 / 2 / 4 / 7 / 15 / 30 / 60 天。</p>' +
       (due.length ? '<div class="wrong-item"><div><b>' + due.length + ' 道到期</b><div class="tiny muted">' + due.slice(0, 4).map(function (k) { return esc(keyLabel(examForKey(k), k)); }).join('、') + '</div></div><a class="btn sm primary" href="#/wrong">去复习</a></div>' : '<div class="empty" style="padding:22px">今天没有到期复习</div>') +
       '</div></div>' +
