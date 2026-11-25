@@ -264,13 +264,13 @@
     keys.forEach(function (k) {
       var el = document.querySelector('input[data-q="' + k + '"]:checked') || document.querySelector('select[data-q="' + k + '"]');
       var val = el ? el.value : '';
-      if (!val) missing++;
+      if (!val) { missing++; return; }
       if (String(val).toUpperCase() === String(keyAnswer(exam, k)).toUpperCase()) right++;
       state.answers[k] = val;
       schedule(k, String(val).toUpperCase() === String(keyAnswer(exam, k)).toUpperCase());
       if (el && el.type === 'radio') {
         var label = el.closest('.choice');
-        if (label) label.classList.add(val && String(val).toUpperCase() === String(keyAnswer(exam, k)).toUpperCase() ? 'correct' : 'wrong');
+        if (label) label.classList.add(String(val).toUpperCase() === String(keyAnswer(exam, k)).toUpperCase() ? 'correct' : 'wrong');
       }
     });
     save();
