@@ -133,6 +133,38 @@
     var key = String(fullKey).indexOf('|') >= 0 ? String(fullKey).split('|')[1] : fullKey;
     return { L: 'listening', C: 'cloze', M: 'matching', R: 'reading' }[key.split('-')[0]] || 'reading';
   }
+  var STOP = ('the and for that with this from have has had not but you your they them their there what when where which who whom whose into over under about after before more most some such than then also only very can could would should will just like make made many much its it’s don’t didn’t isn’t are was were been being one two three').split(' ');
+  function wordsOf(text) {
+    var out = {}, arr = String(text || '').toLowerCase().match(/[a-z][a-z'-]{3,}/g) || [];
+    arr.forEach(function (w) { w = w.replace(/^['-]+|['-]+$/g, ''); if (w.length >= 4 && STOP.indexOf(w) < 0) out[w] = 1; });
+    return Object.keys(out).slice(0, 12);
+  }
+  function questionText(exam, fullKey) {
+    var key = String(fullKey).split('|')[1] || String(fullKey);
+    var p = key.split('-'), type = p[0], n = p[1];
+    if (type === 'C') return exam.cloze.passage;
+    if (type === 'M') { var s = (exam.matching.statements || []).filter(function (x) { return String(x.n) === n; })[0]; return s ? s.text : ''; }
+    if (type === 'R') {
+      for (var i = 0; i < (exam.reading || []).length; i++) {
+        var q = (exam.reading[i].questions || []).filter(function (x) { return String(x.n) === n; })[0];
+        if (q) return q.stem + ' ' + Object.keys(q.options).map(function (k) { return q.options[k]; }).join(' ');
+      }
+    }
+    if (type === 'L') {
+      for (var j = 0; j < (exam.listening.groups || []).length; j++) {
+        var lq = (exam.listening.groups[j].questions || []).filter(function (x) { return String(x.n) === n; })[0];
+        if (lq) return Object.keys(lq.options).map(function (k) { return lq.options[k]; }).join(' ');
+      }
+    }
+    return '';
+  }
+  function wrongWords() {
+    var counts = {};
+    Object.keys(state.wrong).forEach(function (k) {
+      (state.wrong[k].words || []).forEach(function (w) { counts[w] = (counts[w] || 0) + 1; });
+    });
+    return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 16).map(function (w) { return [w, counts[w]]; });
+  }
   function examForKey(k) { var id = String(k).split('|')[0]; return examById(id) || EXAMS[0]; }
 
   /* ---------- stats / review ---------- */
@@ -160,7 +192,7 @@
     state.reviews[key] = r;
     if (!correct) {
       var e = examForKey(key);
-      state.wrong[key] = { key: key, label: keyLabel(e, key), exam: e.id, section: keySection(key), at: Date.now() };
+      state.wrong[key] = { key: key, label: keyLabel(e, key), exam: e.id, section: keySection(key), at: Date.now(), words: wordsOf(questionText(e, key)), cause: '' };
     } else if (r.stage >= REVIEW_DAYS.length) {
       delete state.wrong[key];
     }
@@ -340,7 +372,10 @@
     return '<div class="page-head"><div><h1>错题本</h1><div class="sub">' + keys.length + ' 道 · 按最近错误排序</div></div></div><div class="cet-card">' +
       keys.sort(function (a, b) { return (state.wrong[b].at || 0) - (state.wrong[a].at || 0); }).map(function (k) {
         var w = state.wrong[k];
-        return '<div class="wrong-item"><div><b>' + esc(w.label) + '</b><div class="tiny muted">' + new Date(w.at).toLocaleDateString('zh-CN') + ' · ' + esc(w.section) + '</div></div><div style="display:flex;gap:6px"><span class="tag warm">待复习</span><a class="btn sm" href="#/exam/' + w.exam + '?sec=' + w.section + '">重做</a></div></div>';
+        var causes = ['', '词汇不认识', '长难句没读懂', '定位/同义替换', '听力没跟上', '粗心/看错', '时间不够'];
+        return '<div class="wrong-item"><div class="wrong-main"><b>' + esc(w.label) + '</b><div class="tiny muted">' + new Date(w.at).toLocaleDateString('zh-CN') + ' · ' + esc(w.section) + ' · ' + (w.words || []).slice(0, 5).map(esc).join(' / ') + '</div>' +
+          '<select class="cause-select" data-cause="' + esc(k) + '">' + causes.map(function (c) { return '<option value="' + esc(c) + '"' + (w.cause === c ? ' selected' : '') + '>' + (c || '选错因…') + '</option>'; }).join('') + '</select></div>' +
+          '<div style="display:flex;gap:6px"><span class="tag warm">待复习</span><a class="btn sm" href="#/exam/' + w.exam + '?sec=' + w.section + '">重做</a></div></div>';
       }).join('') + '</div>';
   }
 
@@ -369,7 +404,18 @@
       '<p class="tiny muted" style="margin-top:14px">当前统计基于样卷；批量真题接入后会按套卷/题型/年份拆分。</p></div>' +
       '<div class="cet-card"><div class="eyebrow">REVIEW</div><h2>艾宾浩斯</h2><p class="tiny muted">错题与答对题都会进入复习队列：1 / 2 / 4 / 7 / 15 / 30 / 60 天。</p>' +
       (due.length ? '<div class="wrong-item"><div><b>' + due.length + ' 道到期</b><div class="tiny muted">' + due.slice(0, 4).map(function (k) { return esc(keyLabel(examForKey(k), k)); }).join('、') + '</div></div><a class="btn sm primary" href="#/wrong">去复习</a></div>' : '<div class="empty" style="padding:22px">今天没有到期复习</div>') +
-      '</div></div>';
+      '</div></div>' +
+      (function () {
+        var vocab = wrongWords();
+        var causes = {};
+        Object.keys(state.wrong).forEach(function (k) {
+          var c = state.wrong[k].cause || '未标注';
+          causes[c] = (causes[c] || 0) + 1;
+        });
+        return '<div class="cet-card" style="margin-top:16px"><div class="eyebrow">WEAK POINTS</div><h2>常错词汇与错因</h2>' +
+          (vocab.length ? '<div class="vocab-cloud">' + vocab.map(function (x) { return '<span>' + esc(x[0]) + '<em>' + x[1] + '</em></span>'; }).join('') + '</div>' : '<p class="tiny muted">做错几题后，这里会自动汇总常错词汇。</p>') +
+          '<div class="cause-grid">' + Object.keys(causes).map(function (c) { return '<div><b>' + esc(c) + '</b><span>' + causes[c] + ' 题</span></div>'; }).join('') + '</div></div>';
+      })();
   }
 
   function viewAccount() {
@@ -460,6 +506,13 @@
       return;
     }
   }
+
+  document.addEventListener('change', function (e) {
+    var sel = e.target.closest('[data-cause]');
+    if (!sel) return;
+    var k = sel.getAttribute('data-cause');
+    if (state.wrong[k]) { state.wrong[k].cause = sel.value; save(); toast('错因已记下'); }
+  });
 
   document.addEventListener('submit', async function (e) {
     if (!e.target.matches('[data-auth-form]')) return;
