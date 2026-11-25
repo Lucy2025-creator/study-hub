@@ -391,6 +391,10 @@
         html += '<div class="practice-match"><div>' + esc(q ? q.text : '') + '</div><select class="match-select" data-q="' + key + '"><option value="">—</option>' + 'ABCDEFGHIJKLMNO'.split('').map(function (x) { return '<option value="' + x + '">' + x + '</option>'; }).join('') + '</select></div>';
       } else if (q) {
         html += qBlock(key, q.n, q.stem || '', q.options || {}, '');
+        if (r.section === 'listening') {
+          var grp = (r.exam.listening.groups || []).filter(function (g) { return (g.questions || []).some(function (x) { return x.n === q.n; }); })[0];
+          if (grp && grp.transcript) html += '<button class="btn sm ghost" data-speak="' + esc(grp.transcript) + '">🔊 朗读本题原文</button>';
+        }
       } else {
         html += '<div class="tiny muted">题目待接入</div>';
       }
@@ -444,7 +448,9 @@
   }
 
   function sectionListening(exam) {
-    var note = exam.listening.audio ? '<div class="audio-box"><div class="audio-note">听力音频</div><audio controls src="' + esc(exam.listening.audio) + '"></audio></div>' : '<div class="audio-box"><div class="audio-note">' + esc(exam.listening.note || '听力音频待接入。') + '</div></div>';
+    var hasTr = (exam.listening.groups || []).some(function (g) { return g.transcript; });
+    var note = exam.listening.audio ? '<div class="audio-box"><div class="audio-note">听力音频</div><audio controls src="' + esc(exam.listening.audio) + '"></audio></div>' :
+      '<div class="audio-box"><div class="audio-note">' + esc(exam.listening.note || '听力音频待接入。') + (hasTr ? ' 可用每组下方“朗读原文”合成音精听。' : '') + '</div></div>';
     var groups = exam.listening.groups.map(function (g) {
       return '<div class="group-intro">' + esc(g.intro) + '</div>' + g.questions.map(function (q) {
         return qBlock(exam.id + '|L-' + q.n, q.n, '', q.options, '');
