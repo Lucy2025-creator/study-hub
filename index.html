@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f2e9">
+<title>学习台 · 今天先做哪一件</title>
+<meta name="description" content="数学分析与大学英语四六级的学习主导站：计划、提醒、复习与分流。">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#app">跳到主要内容</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="./" aria-label="学习台首页">
+      <span class="brand-mark">学</span>
+      <span class="brand-text"><strong>学习台</strong><small>PLAN · REVIEW · PRACTICE</small></span>
+    </a>
+    <nav class="mainnav" aria-label="主导航">
+      <a href="#today" class="active">今天</a>
+      <a href="#plan">计划</a>
+      <a href="#rhythm">节奏</a>
+      <a href="english/">英语</a>
+      <a href="https://lucy2025-creator.github.io/math-analysis-quiz/" target="_blank" rel="noopener">数学 ↗</a>
+    </nav>
+    <div class="topbar-actions">
+      <a class="btn sm account-top" href="english/#/account">账号</a>
+      <button class="icon-btn" id="notifyBtn" title="开启复习提醒" aria-label="开启复习提醒">◔</button>
+      <button class="icon-btn" id="themeBtn" title="切换深浅色" aria-label="切换深浅色">☾</button>
+    </div>
+  </div>
+</header>
+
+<main id="app">
+  <section class="hero" id="today">
+    <div class="hero-top">
+      <div class="eyebrow">STUDY HUB · <span id="heroDate"></span></div>
+      <div class="hero-badge" id="heroBadge">今天也先坐一会儿</div>
+    </div>
+    <h1>今天，<em>先做哪一件</em>？</h1>
+    <p class="lede" id="heroLede">不用一次把所有事做完。先把今天最小的那一步走掉。</p>
+    <div class="hero-meta">
+      <div><b id="daysLeft">—</b><span>天后考试</span></div>
+      <div><b id="todayDone">0</b><span>今日完成</span></div>
+      <div><b id="streak">0</b><span>连续天数</span></div>
+      <div><b id="weekDone">0</b><span>本周任务</span></div>
+    </div>
+  </section>
+
+  <section class="subject-grid">
+    <a class="subject-card math" href="https://lucy2025-creator.github.io/math-analysis-quiz/" target="_blank" rel="noopener">
+      <div class="subject-top"><span class="subject-mark">∫</span><span class="tag accent">数学分析</span></div>
+      <h2>刷题、错题、复习</h2>
+      <p>第六版上册 · 第 1–6 章 331 题 · 23+12 个题型 · 艾宾浩斯</p>
+      <div class="subject-foot"><span>进入数学站</span><span>↗</span></div>
+    </a>
+    <a class="subject-card english" href="english/">
+      <div class="subject-top"><span class="subject-mark">A</span><span class="tag warm">大学英语</span></div>
+      <h2>四级为主，六级进阶</h2>
+      <p>作文 · 听力 · 阅读 · 选词 · 翻译 · 真题样卷</p>
+      <div class="subject-foot"><span>进入英语站</span><span>→</span></div>
+    </a>
+  </section>
+
+  <section class="plan-grid" id="plan">
+    <div class="panel plan-panel">
+      <div class="panel-head"><div><div class="eyebrow">TODAY</div><h2>今日计划</h2></div><span class="tiny muted" id="planHint">三件就够</span></div>
+      <form class="add-task" id="addTaskForm">
+        <select id="taskSubject" aria-label="科目">
+          <option value="英语">英语</option>
+          <option value="数学">数学</option>
+          <option value="其他">其他</option>
+        </select>
+        <input id="taskInput" name="task" placeholder="写一件今天能完成的小事…" autocomplete="off" maxlength="60">
+        <button class="btn primary" type="submit">加入</button>
+      </form>
+      <div id="taskList" class="task-list"></div>
+      <div class="task-foot"><span id="taskCount">0 / 0</span><button class="btn sm ghost" id="clearDone" type="button">清掉已完成</button></div>
+    </div>
+
+    <aside class="panel side-panel">
+      <div class="panel-head"><div><div class="eyebrow">REVIEW</div><h2>复习提醒</h2></div><span class="tag green" id="reminderState">未开启</span></div>
+      <p class="side-copy">每天固定一个时间，提醒自己回来把今天的任务收掉。浏览器提醒需要保持页面打开。</p>
+      <label class="field"><span>提醒时间</span><input type="time" id="remindTime" value="20:30"></label>
+      <div class="side-actions">
+        <button class="btn sm primary" id="saveReminder" type="button">保存提醒</button>
+        <button class="btn sm ghost" id="testReminder" type="button">试一下</button>
+      </div>
+      <div class="divider"></div>
+      <label class="field"><span>考试日期</span><input type="date" id="examDate" value="2026-12-19"></label>
+      <div class="mini-note">倒计时按这个日期算，随时可以改。</div>
+    </aside>
+  </section>
+
+  <section id="rhythm">
+    <div class="section-head"><div><div class="eyebrow">RHYTHM</div><h2>这一周</h2></div><span class="tiny muted">完成一项就点亮一格</span></div>
+    <div class="week" id="weekGrid"></div>
+    <div class="quote-card">
+      <div class="quote-mark">“</div>
+      <p>不是每天都得很有劲。只要今天比昨天多走半步，就不算停。</p>
+      <span>— 给现在的你</span>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <span>学习台 · 数学与英语各自练习，这里负责计划和复习</span>
+  <span class="dot">·</span>
+  <a href="english/">英语站</a>
+  <span class="dot">·</span>
+  <a href="https://lucy2025-creator.github.io/math-analysis-quiz/" target="_blank" rel="noopener">数学站</a>
+</footer>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="assets/js/portal.js"></script>
+</body>
+</html>
