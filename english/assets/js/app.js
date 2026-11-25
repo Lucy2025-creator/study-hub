@@ -10,7 +10,7 @@
   var REVIEW_DAYS = [1, 2, 4, 7, 15, 30, 60];
 
   var state = load();
-  var practice = null;
+  var practice = null, pendingSetup = null;
   function defaults() {
     return { v: 1, answers: {}, wrong: {}, reviews: {}, favorites: {}, flags: {}, writing: {}, translation: {}, attempted: {}, updatedAt: Date.now() };
   }
@@ -337,7 +337,7 @@
       '<form class="cet-card select-form" data-select-form><div class="select-grid">' +
       '<label>等级<select name="level"><option value="">全部</option><option>CET4</option><option>CET6</option></select></label>' +
       '<label>年份<select name="year"><option value="">全部</option>' + years.map(function (y) { return '<option>' + y + '</option>'; }).join('') + '</select></label>' +
-      '<label>模式<select name="mode"><option value="random">随机抽题</option><option value="unseen">只抽未做</option><option value="wrong">只抽错题</option><option value="favorites">只抽收藏</option><option value="flagged">只抽标记</option><option value="ratio">按题型比例</option><option value="all">全部（按顺序）</option></select></label>' +
+      '<label>模式<select name="mode"><option value="random">随机抽题</option><option value="unseen">只抽未做</option><option value="wrong">只抽错题</option><option value="favorites">只抽收藏</option><option value="flagged">只抽标记</option><option value="ratio">按题型比例</option><option value="custom">自定义勾选</option><option value="all">全部（按顺序）</option></select></label>' +
       '<label>数量<input class="input" type="number" name="count" min="1" max="200" value="20"></label></div>' +
       '<div class="select-secs"><b>题型</b>' + secs.map(function (x) { return '<label class="sec-check"><input type="checkbox" name="sec" value="' + x[0] + '" checked>' + x[1] + '</label>'; }).join('') + '</div>' +
       '<div class="ratio-line"><b>比例模式</b><span>听力 <input type="number" name="ratio-listening" min="0" max="50" value="5"></span><span>选词 <input type="number" name="ratio-cloze" min="0" max="50" value="5"></span><span>匹配 <input type="number" name="ratio-matching" min="0" max="50" value="5"></span><span>阅读 <input type="number" name="ratio-reading" min="0" max="50" value="5"></span></div>' +
@@ -358,6 +358,12 @@
       return true;
     });
     if (!refs.length) { toast('这个范围没有题'); return; }
+    if (mode === 'custom') {
+      pendingSetup = { level: level, year: year, secs: secs };
+      practice = null;
+      navigate('#/picker');
+      return;
+    }
     if (mode === 'ratio') {
       var picked = [];
       secs.forEach(function (s) {
@@ -372,6 +378,20 @@
     if (!refs.length) { toast('没有可抽的题'); return; }
     practice = { items: refs, result: null, startedAt: Date.now() };
     navigate('#/practice');
+  }
+  function viewPicker() {
+    if (!pendingSetup) return '<div class="empty"><b>先设置范围</b><p class="muted">回到选题页选一次。</p><a class="btn primary" href="#/select">去选题</a></div>';
+    var p = pendingSetup;
+    var refs = allRefs().filter(function (r) {
+      if (p.level && r.exam.level !== p.level) return false;
+      if (p.year && String(r.exam.year) !== String(p.year)) return false;
+      return p.secs.indexOf(r.section) >= 0;
+    }).slice(0, 120);
+    return '<div class="page-head"><div><h1>自定义勾选</h1><div class="sub">当前范围 ' + refs.length + ' 题（最多展示 120 题）</div></div><a class="btn sm ghost" href="#/select">← 重选范围</a></div>' +
+      '<form data-picker-form><div class="cet-card picker-list">' + refs.map(function (r) {
+        var key = r.key;
+        return '<label class="pick-row"><input type="checkbox" name="pick" value="' + key + '"><span><b>' + esc(r.exam.title) + '</b> · ' + sectionName(r.section) + ' · ' + key.split('|')[1] + '</span></label>';
+      }).join('') + '</div><div class="exam-actions"><button class="btn primary">开始练习</button><a class="btn" href="#/select">取消</a></div></form>';
   }
   function viewPractice() {
     if (!practice || !practice.items.length) return '<div class="empty" style="margin-top:30px"><b>还没有选题</b><p class="muted">去题库或选题页选一组题。</p><a class="btn primary" href="#/select">去选题</a></div>';
@@ -630,6 +650,7 @@
     if (route.name === 'home') html = viewHome();
     else if (route.name === 'bank') html = viewBank(route);
     else if (route.name === 'select') html = viewSelect(route);
+    else if (route.name === 'picker') html = viewPicker();
     else if (route.name === 'practice') html = viewPractice(route);
     else if (route.name === 'exam') html = viewExam(route);
     else if (route.name === 'wrong') html = viewWrong();
@@ -719,6 +740,17 @@
   });
 
   document.addEventListener('submit', function (e) {
+    if (e.target.matches('[data-picker-form]')) {
+      e.preventDefault();
+      var keys = $$('input[name=pick]:checked', e.target).map(function (x) { return x.value; });
+      if (!keys.length) { toast('至少勾选 1 题'); return; }
+      var map = {};
+      allRefs().forEach(function (r) { map[r.key] = r; });
+      practice = { items: shuffle(keys.filter(function (k) { return map[k]; }).map(function (k) { return map[k]; })), result: null, startedAt: Date.now() };
+      pendingSetup = null;
+      navigate('#/practice');
+      return;
+    }
     if (e.target.matches('[data-select-form]')) {
       e.preventDefault();
       startPractice(e.target);
