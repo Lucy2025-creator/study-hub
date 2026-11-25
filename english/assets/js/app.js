@@ -326,7 +326,7 @@
     var groups = exam.listening.groups.map(function (g) {
       return '<div class="group-intro">' + esc(g.intro) + '</div>' + g.questions.map(function (q) {
         return qBlock(exam.id + '|L-' + q.n, q.n, '', q.options, '');
-      }).join('');
+      }).join('') + (g.transcript ? '<details class="transcript-box"><summary>听力原文 / 精读</summary><pre>' + esc(g.transcript) + '</pre></details>' : '');
     }).join('');
     return '<div class="cet-card"><div class="section-title">Part II · Listening</div>' + note +
       '<div class="tiny muted" style="margin-bottom:8px">CET 听力题干在音频中播放，卷面只给选项；先听音频，再选答案。</div>' + groups +
