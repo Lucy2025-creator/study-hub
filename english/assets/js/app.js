@@ -18,7 +18,20 @@
       var raw = localStorage.getItem(LS);
       if (!raw) return defaults();
       var s = JSON.parse(raw);
-      return Object.assign(defaults(), s || {});
+      s = Object.assign(defaults(), s || {});
+      var eid = EXAMS[0] && EXAMS[0].id;
+      if (eid) {
+        ['answers', 'reviews', 'wrong'].forEach(function (field) {
+          var src = s[field] || {}, dst = {};
+          Object.keys(src).forEach(function (k) {
+            var nk = k.indexOf('|') >= 0 ? k : eid + '|' + k;
+            dst[nk] = src[k];
+            if (field === 'wrong' && dst[nk] && typeof dst[nk] === 'object') dst[nk].key = nk;
+          });
+          s[field] = dst;
+        });
+      }
+      return s;
     } catch (e) { return defaults(); }
   }
   var syncing = false, pushTimer = null;
@@ -82,16 +95,17 @@
 
   /* ---------- question helpers ---------- */
   function allKeys(exam) {
-    var out = [];
+    var out = [], p = exam.id + '|';
     (exam.listening.groups || []).forEach(function (g) {
-      (g.questions || []).forEach(function (q) { out.push('L-' + q.n); });
+      (g.questions || []).forEach(function (q) { out.push(p + 'L-' + q.n); });
     });
-    Object.keys(exam.cloze.answers || {}).forEach(function (n) { out.push('C-' + n); });
-    (exam.matching.statements || []).forEach(function (s) { out.push('M-' + s.n); });
-    (exam.reading || []).forEach(function (p) { (p.questions || []).forEach(function (q) { out.push('R-' + q.n); }); });
+    Object.keys(exam.cloze.answers || {}).forEach(function (n) { out.push(p + 'C-' + n); });
+    (exam.matching.statements || []).forEach(function (s) { out.push(p + 'M-' + s.n); });
+    (exam.reading || []).forEach(function (p2) { (p2.questions || []).forEach(function (q) { out.push(p + 'R-' + q.n); }); });
     return out;
   }
-  function keyAnswer(exam, key) {
+  function keyAnswer(exam, fullKey) {
+    var key = String(fullKey).indexOf('|') >= 0 ? String(fullKey).split('|')[1] : fullKey;
     var p = key.split('-'), type = p[0], n = p[1];
     if (type === 'C') return exam.cloze.answers[n];
     if (type === 'M') { var m = (exam.matching.statements || []).filter(function (s) { return String(s.n) === n; })[0]; return m && m.answer; }
@@ -109,21 +123,24 @@
     }
     return '';
   }
-  function keyLabel(exam, key) {
+  function keyLabel(exam, fullKey) {
+    var key = String(fullKey).indexOf('|') >= 0 ? String(fullKey).split('|')[1] : fullKey;
     var type = key.split('-')[0], n = key.split('-')[1];
     var names = { L: '听力', C: '选词', M: '匹配', R: '阅读' };
     return (names[type] || type) + ' 第 ' + n + ' 题';
   }
-  function keySection(key) {
+  function keySection(fullKey) {
+    var key = String(fullKey).indexOf('|') >= 0 ? String(fullKey).split('|')[1] : fullKey;
     return { L: 'listening', C: 'cloze', M: 'matching', R: 'reading' }[key.split('-')[0]] || 'reading';
   }
+  function examForKey(k) { var id = String(k).split('|')[0]; return examById(id) || EXAMS[0]; }
 
   /* ---------- stats / review ---------- */
   function answeredCount() { return Object.keys(state.answers).length; }
   function correctCount() {
     var c = 0;
     Object.keys(state.answers).forEach(function (k) {
-      var e = EXAMS[0]; if (!e) return;
+      var e = examForKey(k); if (!e) return;
       if (String(state.answers[k]).toUpperCase() === String(keyAnswer(e, k)).toUpperCase()) c++;
     });
     return c;
@@ -142,7 +159,8 @@
     r.nextAt = r.stage >= REVIEW_DAYS.length ? 0 : Date.now() + REVIEW_DAYS[r.stage] * DAY;
     state.reviews[key] = r;
     if (!correct) {
-      state.wrong[key] = { key: key, label: keyLabel(EXAMS[0], key), exam: EXAMS[0].id, section: keySection(key), at: Date.now() };
+      var e = examForKey(key);
+      state.wrong[key] = { key: key, label: keyLabel(e, key), exam: e.id, section: keySection(key), at: Date.now() };
     } else if (r.stage >= REVIEW_DAYS.length) {
       delete state.wrong[key];
     }
@@ -226,7 +244,7 @@
     var note = exam.listening.audio ? '<div class="audio-box"><div class="audio-note">听力音频</div><audio controls src="' + esc(exam.listening.audio) + '"></audio></div>' : '<div class="audio-box"><div class="audio-note">' + esc(exam.listening.note || '听力音频待接入。') + '</div></div>';
     var groups = exam.listening.groups.map(function (g) {
       return '<div class="group-intro">' + esc(g.intro) + '</div>' + g.questions.map(function (q) {
-        return qBlock('L-' + q.n, q.n, '', q.options, '');
+        return qBlock(exam.id + '|L-' + q.n, q.n, '', q.options, '');
       }).join('');
     }).join('');
     return '<div class="cet-card"><div class="section-title">Part II · Listening</div>' + note +
@@ -237,7 +255,7 @@
   function sectionCloze(exam) {
     var c = exam.cloze;
     var body = c.passage.replace(/___(\d+)___/g, function (m, n) {
-      return '<select class="blank-select" data-q="C-' + n + '"><option value="">__</option>' + c.bank.map(function (b) { return '<option value="' + b[0] + '">' + b[0] + '</option>'; }).join('') + '</select>';
+      return '<select class="blank-select" data-q="' + exam.id + '|C-' + n + '"><option value="">__</option>' + c.bank.map(function (b) { return '<option value="' + b[0] + '">' + b[0] + '</option>'; }).join('') + '</select>';
     });
     return '<div class="cet-card"><div class="section-title">Part III · Section A · 选词填空</div>' +
       '<div class="word-bank">' + c.bank.map(function (b) { return '<span><b>' + b[0] + '</b>' + esc(b[1]) + '</span>'; }).join('') + '</div>' +
@@ -250,7 +268,7 @@
     return '<div class="cet-card"><div class="section-title">Part III · Section B · 长篇阅读匹配</div>' +
       '<p class="tiny muted">' + esc(exam.matching.note || '') + '</p>' +
       exam.matching.statements.map(function (s) {
-        return '<div class="match-row"><div class="txt"><b>' + s.n + '.</b> ' + esc(s.text) + '</div><select class="match-select" data-q="M-' + s.n + '"><option value="">—</option>' + letters + '</select></div>';
+        return '<div class="match-row"><div class="txt"><b>' + s.n + '.</b> ' + esc(s.text) + '</div><select class="match-select" data-q="' + exam.id + '|M-' + s.n + '"><option value="">—</option>' + letters + '</select></div>';
       }).join('') +
       '<div class="exam-actions"><button class="btn primary" data-grade="matching">提交本节</button><span class="tiny muted">7 题 · 段落可重复</span></div><div id="gradeResult"></div></div>';
   }
@@ -259,7 +277,7 @@
     return '<div class="cet-card"><div class="section-title">Part III · Section C · 仔细阅读</div>' +
       exam.reading.map(function (p) {
         return '<h3 style="margin:16px 0 8px">' + esc(p.title) + '</h3><div class="passage">' + p.passage.split('\n\n').map(function (x) { return '<p>' + esc(x) + '</p>'; }).join('') + '</div>' +
-          p.questions.map(function (q) { return qBlock('R-' + q.n, q.n, q.stem, q.options, ''); }).join('');
+          p.questions.map(function (q) { return qBlock(exam.id + '|R-' + q.n, q.n, q.stem, q.options, ''); }).join('');
       }).join('') +
       '<div class="exam-actions"><button class="btn primary" data-grade="reading">提交本节</button><span class="tiny muted">' + exam.reading.reduce(function (n, p) { return n + p.questions.length; }, 0) + ' 题</span></div><div id="gradeResult"></div></div>';
   }
@@ -287,10 +305,11 @@
   function grade(section) {
     var exam = EXAMS[0]; if (!exam) return;
     var keys = [];
-    if (section === 'listening') keys = allKeys(exam).filter(function (k) { return k[0] === 'L'; });
-    if (section === 'cloze') keys = allKeys(exam).filter(function (k) { return k[0] === 'C'; });
-    if (section === 'matching') keys = allKeys(exam).filter(function (k) { return k[0] === 'M'; });
-    if (section === 'reading') keys = allKeys(exam).filter(function (k) { return k[0] === 'R'; });
+    function typeOf(k) { return String(k).split('|')[1].charAt(0); }
+    if (section === 'listening') keys = allKeys(exam).filter(function (k) { return typeOf(k) === 'L'; });
+    if (section === 'cloze') keys = allKeys(exam).filter(function (k) { return typeOf(k) === 'C'; });
+    if (section === 'matching') keys = allKeys(exam).filter(function (k) { return typeOf(k) === 'M'; });
+    if (section === 'reading') keys = allKeys(exam).filter(function (k) { return typeOf(k) === 'R'; });
     var total = keys.length, right = 0, missing = 0;
     keys.forEach(function (k) {
       var el = document.querySelector('input[data-q="' + k + '"]:checked') || document.querySelector('select[data-q="' + k + '"]');
@@ -349,7 +368,7 @@
       '<div class="cet-meta"><div><b>' + keys.length + '</b><span>已作答</span></div><div><b>' + correct + '</b><span>答对</span></div><div><b>' + (keys.length ? Math.round(correct * 100 / keys.length) + '%' : '—') + '</b><span>正确率</span></div><div><b>' + due.length + '</b><span>待复习</span></div></div>' +
       '<p class="tiny muted" style="margin-top:14px">当前统计基于样卷；批量真题接入后会按套卷/题型/年份拆分。</p></div>' +
       '<div class="cet-card"><div class="eyebrow">REVIEW</div><h2>艾宾浩斯</h2><p class="tiny muted">错题与答对题都会进入复习队列：1 / 2 / 4 / 7 / 15 / 30 / 60 天。</p>' +
-      (due.length ? '<div class="wrong-item"><div><b>' + due.length + ' 道到期</b><div class="tiny muted">' + due.slice(0, 4).map(function (k) { return esc(keyLabel(EXAMS[0], k)); }).join('、') + '</div></div><a class="btn sm primary" href="#/wrong">去复习</a></div>' : '<div class="empty" style="padding:22px">今天没有到期复习</div>') +
+      (due.length ? '<div class="wrong-item"><div><b>' + due.length + ' 道到期</b><div class="tiny muted">' + due.slice(0, 4).map(function (k) { return esc(keyLabel(examForKey(k), k)); }).join('、') + '</div></div><a class="btn sm primary" href="#/wrong">去复习</a></div>' : '<div class="empty" style="padding:22px">今天没有到期复习</div>') +
       '</div></div>';
   }
 
