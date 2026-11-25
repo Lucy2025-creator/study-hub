@@ -166,6 +166,7 @@
     return Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 16).map(function (w) { return [w, counts[w]]; });
   }
   function examForKey(k) { var id = String(k).split('|')[0]; return examById(id) || EXAMS[0]; }
+  function hasAnswers(exam) { return allKeys(exam).length > 0 && allKeys(exam).every(function (k) { return !!keyAnswer(exam, k); }); }
 
   /* ---------- stats / review ---------- */
   function answeredCount() { return Object.keys(state.answers).length; }
@@ -269,7 +270,7 @@
     return '<div class="page-head"><div><h1>题库</h1><div class="sub">' + EXAMS.length + ' 套真题 · 当前 ' + list.length + ' 套 · 四级为主，六级进阶</div></div></div>' + filters +
       (list.length ? list.map(function (e) {
         var p = examProgress(e), pct = p.total ? Math.round(p.answered * 100 / p.total) : 0;
-        return '<div class="exam-card"><div class="exam-main"><div class="meta">' + e.level + ' · ' + e.year + '.' + String(e.month).padStart(2, '0') + ' · 第 ' + e.set + ' 套</div><h3>' + esc(e.title) + '</h3><div class="meta">' + esc(e.source) + ' · 已答 ' + p.answered + '/' + p.total + ' · 正确率 ' + (p.answered ? Math.round(p.correct * 100 / p.answered) + '%' : '—') + '</div><div class="ebar"><i style="width:' + pct + '%"></i></div></div>' +
+        return '<div class="exam-card"><div class="exam-main"><div class="meta">' + e.level + ' · ' + e.year + '.' + String(e.month).padStart(2, '0') + ' · 第 ' + e.set + ' 套' + (hasAnswers(e) ? '' : ' · 答案待接入') + '</div><h3>' + esc(e.title) + '</h3><div class="meta">' + esc(e.source) + ' · 已答 ' + p.answered + '/' + p.total + ' · 正确率 ' + (p.answered ? Math.round(p.correct * 100 / p.answered) + '%' : '—') + '</div><div class="ebar"><i style="width:' + pct + '%"></i></div></div>' +
           '<div class="exam-actions"><a class="btn sm" href="#/exam/' + e.id + '?sec=writing">作文</a><a class="btn sm" href="#/exam/' + e.id + '?sec=listening">听力</a><a class="btn sm" href="#/exam/' + e.id + '?sec=reading">阅读</a><a class="btn sm primary" href="#/exam/' + e.id + '">整套</a></div></div>';
       }).join('') : '<div class="empty" style="margin-top:18px"><b>没有符合条件的套卷</b><p class="muted">换个年份或状态试试。</p></div>') +
       '<div class="tiny muted" style="margin-top:16px">批量真题继续接入中；当前 9 套，后续按年份铺开。</div>';
@@ -286,7 +287,8 @@
     var exam = examById(route.param) || EXAMS[0];
     if (!exam) return '<div class="empty">还没有真题数据</div>';
     var sec = route.query.sec || 'writing';
-    var html = '<div class="exam-head"><div><div class="eyebrow">' + exam.level + ' · ' + exam.year + '.' + String(exam.month).padStart(2, '0') + ' · SET ' + exam.set + '</div><h1>' + esc(exam.title) + '</h1><div class="tiny muted">' + esc(exam.source) + '</div></div><a class="btn sm ghost" href="#/bank">← 题库</a></div>' + tabs(exam, sec);
+    var html = '<div class="exam-head"><div><div class="eyebrow">' + exam.level + ' · ' + exam.year + '.' + String(exam.month).padStart(2, '0') + ' · SET ' + exam.set + '</div><h1>' + esc(exam.title) + '</h1><div class="tiny muted">' + esc(exam.source) + '</div></div><a class="btn sm ghost" href="#/bank">← 题库</a></div>' + tabs(exam, sec) +
+      (hasAnswers(exam) ? '' : '<div class="kb-section-note">这套的答案键还没接入，当前只展示题面；提交判分已关闭，避免把未接入答案误判成错题。</div>');
     if (sec === 'writing') html += sectionWriting(exam);
     else if (sec === 'listening') html += sectionListening(exam);
     else if (sec === 'cloze') html += sectionCloze(exam);
@@ -369,7 +371,8 @@
 
   /* ---------- grading ---------- */
   function grade(section) {
-    var exam = EXAMS[0]; if (!exam) return;
+    var exam = examById(hashRoute().param) || EXAMS[0]; if (!exam) return;
+    if (!hasAnswers(exam)) { toast('这套答案键还没接入，暂不判分'); return; }
     var keys = [];
     function typeOf(k) { return String(k).split('|')[1].charAt(0); }
     if (section === 'listening') keys = allKeys(exam).filter(function (k) { return typeOf(k) === 'L'; });
