@@ -12,7 +12,7 @@
   var state = load();
   var practice = null;
   function defaults() {
-    return { v: 1, answers: {}, wrong: {}, reviews: {}, writing: {}, translation: {}, attempted: {}, updatedAt: Date.now() };
+    return { v: 1, answers: {}, wrong: {}, reviews: {}, favorites: {}, flags: {}, writing: {}, translation: {}, attempted: {}, updatedAt: Date.now() };
   }
   function load() {
     try {
@@ -337,7 +337,7 @@
       '<form class="cet-card select-form" data-select-form><div class="select-grid">' +
       '<label>等级<select name="level"><option value="">全部</option><option>CET4</option><option>CET6</option></select></label>' +
       '<label>年份<select name="year"><option value="">全部</option>' + years.map(function (y) { return '<option>' + y + '</option>'; }).join('') + '</select></label>' +
-      '<label>模式<select name="mode"><option value="random">随机抽题</option><option value="unseen">只抽未做</option><option value="wrong">只抽错题</option><option value="ratio">按题型比例</option><option value="all">全部（按顺序）</option></select></label>' +
+      '<label>模式<select name="mode"><option value="random">随机抽题</option><option value="unseen">只抽未做</option><option value="wrong">只抽错题</option><option value="favorites">只抽收藏</option><option value="flagged">只抽标记</option><option value="ratio">按题型比例</option><option value="all">全部（按顺序）</option></select></label>' +
       '<label>数量<input class="input" type="number" name="count" min="1" max="200" value="20"></label></div>' +
       '<div class="select-secs"><b>题型</b>' + secs.map(function (x) { return '<label class="sec-check"><input type="checkbox" name="sec" value="' + x[0] + '" checked>' + x[1] + '</label>'; }).join('') + '</div>' +
       '<div class="ratio-line"><b>比例模式</b><span>听力 <input type="number" name="ratio-listening" min="0" max="50" value="5"></span><span>选词 <input type="number" name="ratio-cloze" min="0" max="50" value="5"></span><span>匹配 <input type="number" name="ratio-matching" min="0" max="50" value="5"></span><span>阅读 <input type="number" name="ratio-reading" min="0" max="50" value="5"></span></div>' +
@@ -353,6 +353,8 @@
       if (secs.indexOf(r.section) < 0) return false;
       if (mode === 'unseen' && state.answers[r.key]) return false;
       if (mode === 'wrong' && !state.wrong[r.key]) return false;
+      if (mode === 'favorites' && !state.favorites[r.key]) return false;
+      if (mode === 'flagged' && !state.flags[r.key]) return false;
       return true;
     });
     if (!refs.length) { toast('这个范围没有题'); return; }
@@ -508,7 +510,8 @@
     return '<div class="q-block" data-key="' + key + '"><div class="q-head"><span class="q-num">' + n + '</span><div class="q-stem">' + (stem ? esc(stem) : '听音频，选出正确答案。') + '</div></div>' +
       '<div class="choices">' + Object.keys(options).map(function (k) {
         return '<label class="choice"><input type="radio" name="q-' + key + '" value="' + k + '" data-q="' + key + '"><span><b>' + k + ')</b> ' + esc(options[k]) + '</span></label>';
-      }).join('') + '</div></div>';
+      }).join('') + '</div>' +
+      '<div class="q-tools"><button type="button" class="q-tool' + (state.favorites[key] ? ' on' : '') + '" data-fav="' + key + '">☆ 收藏</button><button type="button" class="q-tool' + (state.flags[key] ? ' on' : '') + '" data-flag="' + key + '">⚑ 标记</button></div></div>';
   }
 
   function countWords(s) { return (String(s || '').trim().match(/[A-Za-z0-9’'-]+/g) || []).length; }
@@ -648,6 +651,14 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.fav) {
+      if (state.favorites[b.dataset.fav]) delete state.favorites[b.dataset.fav]; else state.favorites[b.dataset.fav] = 1;
+      b.classList.toggle('on'); save(); return;
+    }
+    if (b.dataset.flag) {
+      if (state.flags[b.dataset.flag]) delete state.flags[b.dataset.flag]; else state.flags[b.dataset.flag] = 1;
+      b.classList.toggle('on'); save(); return;
+    }
     if (b.dataset.grade) { if (b.dataset.grade === 'practice') gradePractice(); else grade(b.dataset.grade); return; }
     if (b.dataset.saveWriting) {
       var ta = $('[data-writing]');

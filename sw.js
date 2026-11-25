@@ -1,5 +1,5 @@
 /* 学习台 PWA：缓存壳子与题库数据；音频按需联网，不进缓存 */
-const CACHE = 'studyhub-v9';
+const CACHE = 'studyhub-v10';
 const ASSETS = [
   './',
   './index.html',
