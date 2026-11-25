@@ -10,6 +10,7 @@
   var REVIEW_DAYS = [1, 2, 4, 7, 15, 30, 60];
 
   var state = load();
+  var practice = null;
   function defaults() {
     return { v: 1, answers: {}, wrong: {}, reviews: {}, writing: {}, translation: {}, attempted: {}, updatedAt: Date.now() };
   }
@@ -277,7 +278,7 @@
       '<div class="fgroup">' + chip('year', '', '全部年份', !q.year) + years.map(function (y) { return chip('year', String(y), y, String(q.year) === String(y)); }).join('') + '</div>' +
       '<div class="fgroup">' + [['', '全部状态'], ['new', '未做'], ['wrong', '有错题'], ['due', '待复习']].map(function (x) { return chip('status', x[0], x[1], (q.status || '') === x[0]); }).join('') + '</div>' +
       '<form class="searchbox" data-exam-search><input class="input" name="q" value="' + esc(q.q || '') + '" placeholder="搜套卷 / 年份…"><button class="btn sm">搜索</button></form></div>';
-    return '<div class="page-head"><div><h1>题库</h1><div class="sub">' + EXAMS.length + ' 套真题 · 当前 ' + list.length + ' 套 · 第 ' + page + '/' + pages + ' 页</div></div></div>' + filters +
+    return '<div class="page-head"><div><h1>题库</h1><div class="sub">' + EXAMS.length + ' 套真题 · 当前 ' + list.length + ' 套 · 第 ' + page + '/' + pages + ' 页</div></div><a class="btn primary sm" href="#/select">选题练习 →</a></div>' + filters +
       (paged.length ? paged.map(function (e) {
         var p = examProgress(e), pct = p.total ? Math.round(p.answered * 100 / p.total) : 0;
         return '<div class="exam-card"><div class="exam-main"><div class="meta">' + e.level + ' · ' + e.year + '.' + String(e.month).padStart(2, '0') + ' · 第 ' + e.set + ' 套' + (hasAnswers(e) ? '' : ' · 答案待接入') + '</div><h3>' + esc(e.title) + '</h3><div class="meta">' + esc(e.source) + ' · 已答 ' + p.answered + '/' + p.total + ' · 正确率 ' + (p.answered ? Math.round(p.correct * 100 / p.answered) + '%' : '—') + '</div><div class="ebar"><i style="width:' + pct + '%"></i></div></div>' +
@@ -294,6 +295,127 @@
     return '<div class="section-tabs">' + list.map(function (x) {
       return '<a class="' + (x[0] === sec ? 'on' : '') + '" href="#/exam/' + exam.id + '?sec=' + x[0] + '">' + x[1] + '</a>';
     }).join('') + '</div>';
+  }
+
+  /* ---------- question-level selection (aligned with math site modes) ---------- */
+  function shuffle(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function allRefs() {
+    var out = [];
+    EXAMS.forEach(function (e) {
+      allKeys(e).forEach(function (k) {
+        out.push({ key: k, exam: e, section: keySection(k) });
+      });
+    });
+    return out;
+  }
+  function refQ(r) {
+    var key = r.key.split('|')[1], p = key.split('-'), t = p[0], n = p[1];
+    if (t === 'L') {
+      for (var i = 0; i < (r.exam.listening.groups || []).length; i++) {
+        var q = (r.exam.listening.groups[i].questions || []).filter(function (x) { return String(x.n) === n; })[0];
+        if (q) return q;
+      }
+    }
+    if (t === 'M') return (r.exam.matching.statements || []).filter(function (x) { return String(x.n) === n; })[0];
+    if (t === 'R') {
+      for (var j = 0; j < (r.exam.reading || []).length; j++) {
+        var rq = (r.exam.reading[j].questions || []).filter(function (x) { return String(x.n) === n; })[0];
+        if (rq) return rq;
+      }
+    }
+    return null;
+  }
+  function sectionName(s) { return { listening: '听力', cloze: '选词', matching: '匹配', reading: '阅读' }[s] || s; }
+  function viewSelect() {
+    var years = []; EXAMS.forEach(function (e) { if (years.indexOf(e.year) < 0) years.push(e.year); }); years.sort(function (a, b) { return b - a; });
+    var secs = [['listening', '听力'], ['cloze', '选词'], ['matching', '匹配'], ['reading', '阅读']];
+    return '<div class="page-head"><div><h1>选题练习</h1><div class="sub">按范围、题型、状态抽题；和数学站一样支持随机/未做/错题/全部</div></div><a class="btn sm ghost" href="#/bank">← 题库</a></div>' +
+      '<form class="cet-card select-form" data-select-form><div class="select-grid">' +
+      '<label>等级<select name="level"><option value="">全部</option><option>CET4</option><option>CET6</option></select></label>' +
+      '<label>年份<select name="year"><option value="">全部</option>' + years.map(function (y) { return '<option>' + y + '</option>'; }).join('') + '</select></label>' +
+      '<label>模式<select name="mode"><option value="random">随机抽题</option><option value="unseen">只抽未做</option><option value="wrong">只抽错题</option><option value="ratio">按题型比例</option><option value="all">全部（按顺序）</option></select></label>' +
+      '<label>数量<input class="input" type="number" name="count" min="1" max="200" value="20"></label></div>' +
+      '<div class="select-secs"><b>题型</b>' + secs.map(function (x) { return '<label class="sec-check"><input type="checkbox" name="sec" value="' + x[0] + '" checked>' + x[1] + '</label>'; }).join('') + '</div>' +
+      '<div class="ratio-line"><b>比例模式</b><span>听力 <input type="number" name="ratio-listening" min="0" max="50" value="5"></span><span>选词 <input type="number" name="ratio-cloze" min="0" max="50" value="5"></span><span>匹配 <input type="number" name="ratio-matching" min="0" max="50" value="5"></span><span>阅读 <input type="number" name="ratio-reading" min="0" max="50" value="5"></span></div>' +
+      '<div class="exam-actions"><button class="btn primary">开始练习</button><span class="tiny muted">听力题会显示该套音频（已接入的）或原文；答案提交后自动判分。</span></div></form>';
+  }
+  function startPractice(form) {
+    var secs = $$('input[name=sec]:checked', form).map(function (x) { return x.value; });
+    var level = form.level.value, year = form.year.value, mode = form.mode.value;
+    var count = Math.max(1, Math.min(200, parseInt(form.count.value || '20', 10)));
+    var refs = allRefs().filter(function (r) {
+      if (level && r.exam.level !== level) return false;
+      if (year && String(r.exam.year) !== year) return false;
+      if (secs.indexOf(r.section) < 0) return false;
+      if (mode === 'unseen' && state.answers[r.key]) return false;
+      if (mode === 'wrong' && !state.wrong[r.key]) return false;
+      return true;
+    });
+    if (!refs.length) { toast('这个范围没有题'); return; }
+    if (mode === 'ratio') {
+      var picked = [];
+      secs.forEach(function (s) {
+        var n = Math.max(0, parseInt((form['ratio-' + s] || {}).value || '0', 10));
+        picked = picked.concat(shuffle(refs.filter(function (r) { return r.section === s; })).slice(0, n));
+      });
+      refs = shuffle(picked);
+    } else {
+      if (mode === 'random') refs = shuffle(refs);
+      if (mode !== 'all') refs = refs.slice(0, count);
+    }
+    if (!refs.length) { toast('没有可抽的题'); return; }
+    practice = { items: refs, result: null, startedAt: Date.now() };
+    navigate('#/practice');
+  }
+  function viewPractice() {
+    if (!practice || !practice.items.length) return '<div class="empty" style="margin-top:30px"><b>还没有选题</b><p class="muted">去题库或选题页选一组题。</p><a class="btn primary" href="#/select">去选题</a></div>';
+    var items = practice.items;
+    var audioExams = {};
+    var html = '<div class="page-head"><div><h1>练习 · ' + items.length + ' 题</h1><div class="sub">' + items.slice(0, 4).map(function (r) { return esc(r.exam.title); }).join(' · ') + (items.length > 4 ? ' …' : '') + '</div></div><a class="btn sm ghost" href="#/select">重选</a></div>';
+    var groups = {};
+    items.forEach(function (r) { if (r.section === 'listening' && r.exam.listening.audio) audioExams[r.exam.id] = r.exam.listening.audio; });
+    var aud = Object.keys(audioExams);
+    if (aud.length) html += '<div class="cet-card"><div class="audio-note">音频（按套卷）</div>' + aud.map(function (id) { return '<div class="practice-audio"><b>' + esc(id) + '</b><audio controls src="' + esc(audioExams[id]) + '"></audio></div>'; }).join('') + '</div>';
+    html += '<div class="cet-card practice-list">';
+    items.forEach(function (r, idx) {
+      var q = refQ(r), key = r.key;
+      html += '<div class="practice-item"><div class="tiny muted">' + esc(r.exam.title) + ' · ' + sectionName(r.section) + '</div>';
+      if (r.section === 'cloze') {
+        var n = key.split('|')[1].split('-')[1];
+        html += '<div class="practice-cloze"><b>选词第 ' + n + ' 空</b><select class="blank-select" data-q="' + key + '"><option value="">__</option>' + r.exam.cloze.bank.map(function (b) { return '<option value="' + b[0] + '">' + b[0] + '</option>'; }).join('') + '</select><details class="transcript-box"><summary>看选词段落</summary><div class="passage">' + r.exam.cloze.passage.replace(/___(\d+)___/g, '（$1）').split('\n\n').map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') + '</div></details></div>';
+      } else if (r.section === 'matching') {
+        html += '<div class="practice-match"><div>' + esc(q ? q.text : '') + '</div><select class="match-select" data-q="' + key + '"><option value="">—</option>' + 'ABCDEFGHIJKLMNO'.split('').map(function (x) { return '<option value="' + x + '">' + x + '</option>'; }).join('') + '</select></div>';
+      } else if (q) {
+        html += qBlock(key, q.n, q.stem || '', q.options || {}, '');
+      } else {
+        html += '<div class="tiny muted">题目待接入</div>';
+      }
+      html += '</div>';
+    });
+    html += '<div class="exam-actions"><button class="btn primary" data-grade="practice">提交判分</button><span class="tiny muted">已答 <b id="pracAns">0</b> / ' + items.length + '</span></div>' +
+      (practice.result ? '<div class="grade-result"><b>' + practice.result.right + ' / ' + practice.result.ans + ' 正确</b>，未答 ' + practice.result.missing + ' 题；已记录到错题/复习。</div>' : '') + '</div>';
+    return html;
+  }
+  function gradePractice() {
+    if (!practice) return;
+    var ans = 0, right = 0, missing = 0;
+    practice.items.forEach(function (r) {
+      var el = document.querySelector('input[data-q="' + r.key + '"]:checked') || document.querySelector('select[data-q="' + r.key + '"]');
+      var val = el ? el.value : '';
+      if (!val) { missing++; return; }
+      ans++;
+      var ok = String(val).toUpperCase() === String(keyAnswer(r.exam, r.key)).toUpperCase();
+      if (ok) right++;
+      state.answers[r.key] = val;
+      schedule(r.key, ok);
+    });
+    save();
+    practice.result = { ans: ans, right: right, missing: missing, total: practice.items.length };
+    render();
   }
 
   function viewExam(route) {
@@ -326,7 +448,7 @@
     var groups = exam.listening.groups.map(function (g) {
       return '<div class="group-intro">' + esc(g.intro) + '</div>' + g.questions.map(function (q) {
         return qBlock(exam.id + '|L-' + q.n, q.n, '', q.options, '');
-      }).join('') + (g.transcript ? '<details class="transcript-box"><summary>听力原文 / 精读</summary><pre>' + esc(g.transcript) + '</pre></details>' : '');
+      }).join('') + (g.transcript ? '<div class="transcript-tools"><button class="btn sm ghost" data-speak="' + esc(g.transcript) + '">🔊 朗读原文</button><details class="transcript-box"><summary>听力原文 / 精读</summary><pre>' + esc(g.transcript) + '</pre></details></div>' : '');
     }).join('');
     return '<div class="cet-card"><div class="section-title">Part II · Listening</div>' + note +
       '<div class="tiny muted" style="margin-bottom:8px">CET 听力题干在音频中播放，卷面只给选项；先听音频，再选答案。</div>' + groups +
@@ -498,6 +620,8 @@
     var html = '';
     if (route.name === 'home') html = viewHome();
     else if (route.name === 'bank') html = viewBank(route);
+    else if (route.name === 'select') html = viewSelect(route);
+    else if (route.name === 'practice') html = viewPractice(route);
     else if (route.name === 'exam') html = viewExam(route);
     else if (route.name === 'wrong') html = viewWrong();
     else if (route.name === 'guides') html = viewGuides(route);
@@ -518,7 +642,7 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.grade) { grade(b.dataset.grade); return; }
+    if (b.dataset.grade) { if (b.dataset.grade === 'practice') gradePractice(); else grade(b.dataset.grade); return; }
     if (b.dataset.saveWriting) {
       var ta = $('[data-writing]');
       state.writing[b.dataset.saveWriting] = ta ? ta.value : '';
@@ -529,6 +653,15 @@
       var tt = $('[data-translation]');
       state.translation[b.dataset.saveTranslation] = tt ? tt.value : '';
       save(); toast('译文已保存到本机');
+      return;
+    }
+    if (b.dataset.speak) {
+      if (!window.speechSynthesis) { toast('浏览器不支持朗读'); return; }
+      speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(b.dataset.speak);
+      u.lang = 'en-US'; u.rate = 0.9;
+      speechSynthesis.speak(u);
+      toast('正在朗读原文（合成音，非原音频）');
       return;
     }
     if (b.dataset.account) { handleAccount(b.dataset.account); return; }
@@ -569,6 +702,11 @@
   });
 
   document.addEventListener('submit', function (e) {
+    if (e.target.matches('[data-select-form]')) {
+      e.preventDefault();
+      startPractice(e.target);
+      return;
+    }
     if (!e.target.matches('[data-exam-search]')) return;
     e.preventDefault();
     var val = (e.target.querySelector('input[name=q]') || {}).value || '';
