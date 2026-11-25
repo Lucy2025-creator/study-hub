@@ -30,7 +30,8 @@
         { id: 'seed-3', title: '数学：做 10 道错题', subject: '数学', date: todayKey(), done: false }
       ],
       seeded: true,
-      notified: {}
+      notified: {},
+      updatedAt: Date.now()
     };
   }
   function load() {
@@ -48,8 +49,37 @@
     } catch (e) { return defaults(); }
   }
   var state = load();
+  var syncing = false, pushTimer = null;
   function save() {
+    state.updatedAt = Date.now();
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    queuePush();
+  }
+  function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function cloud() { return window.STUDY_CLOUD; }
+  function queuePush() {
+    if (syncing || !cloud() || !cloud().user) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () {
+      cloud().push('study_plan', state).then(function () {
+        var a = $('#accountTop'); if (a) a.title = '已同步 ' + new Date().toLocaleTimeString();
+      }).catch(function () {});
+    }, 900);
+  }
+  function pullPlan() {
+    var c = cloud();
+    if (!c || !c.user) return;
+    c.pull('study_plan').then(function (row) {
+      if (!row || !row.data || !row.data.updatedAt) { queuePush(); return; }
+      if (row.data.updatedAt > (state.updatedAt || 0)) {
+        syncing = true;
+        state = Object.assign(defaults(), row.data);
+        saveLocal(); render(); syncing = false;
+        toast('已从云端同步计划');
+      } else if ((state.updatedAt || 0) > row.data.updatedAt) {
+        queuePush();
+      }
+    }).catch(function () {});
   }
 
   function toast(msg) {
@@ -222,8 +252,20 @@
     applyTheme(t);
   }
 
+  function initCloud() {
+    var c = cloud();
+    if (!c || !c.ready) return;
+    c.onChange(function (u) {
+      var a = $('#accountTop');
+      if (a) a.textContent = u ? (u.email || '已登录').split('@')[0] : '登录';
+      if (u) pullPlan();
+    });
+    window.addEventListener('online', function () { pullPlan(); });
+  }
+
   function init() {
     initTheme();
+    initCloud();
     render();
     $('#addTaskForm').addEventListener('submit', addTask);
     $('#taskList').addEventListener('click', onClick);

@@ -11,7 +11,7 @@
 
   var state = load();
   function defaults() {
-    return { v: 1, answers: {}, wrong: {}, reviews: {}, writing: {}, translation: {}, attempted: {} };
+    return { v: 1, answers: {}, wrong: {}, reviews: {}, writing: {}, translation: {}, attempted: {}, updatedAt: Date.now() };
   }
   function load() {
     try {
@@ -21,7 +21,38 @@
       return Object.assign(defaults(), s || {});
     } catch (e) { return defaults(); }
   }
-  function save() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
+  var syncing = false, pushTimer = null;
+  function save() {
+    state.updatedAt = Date.now();
+    try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {}
+    queuePush();
+  }
+  function saveLocal() { try { localStorage.setItem(LS, JSON.stringify(state)); } catch (e) {} }
+  function cloud() { return window.STUDY_CLOUD; }
+  function queuePush() {
+    if (syncing || !cloud() || !cloud().user) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () {
+      cloud().push('cet_state', state).then(function () {
+        var el = $('#syncState'); if (el) el.textContent = '已同步 ' + new Date().toLocaleTimeString();
+      }).catch(function () {});
+    }, 800);
+  }
+  function pullCloud() {
+    var c = cloud();
+    if (!c || !c.user) return;
+    c.pull('cet_state').then(function (row) {
+      if (!row || !row.data || !row.data.updatedAt) { queuePush(); return; }
+      if (row.data.updatedAt > (state.updatedAt || 0)) {
+        syncing = true;
+        state = Object.assign(defaults(), row.data);
+        saveLocal(); render(); syncing = false;
+        toast('已从云端同步答题记录');
+      } else if ((state.updatedAt || 0) > row.data.updatedAt) {
+        queuePush();
+      }
+    }).catch(function () {});
+  }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -323,9 +354,22 @@
   }
 
   function viewAccount() {
-    return '<div class="page-head"><div><h1>账号与云同步</h1><div class="sub">与数学站共用同一套 Supabase 账号；英语站同步表正在接入</div></div></div>' +
-      '<div class="cet-card account-box"><h2>当前状态</h2><p>英语站的答题记录先保存在本机。接入 `cet_state` / `cet_traces` 后，会和数学站使用同一个登录账号，实现进度、错题、作文/译文草稿跨设备同步。</p>' +
-      '<p class="tiny muted">下一步：复用数学站的 Supabase publishable key，新增英语状态表与 RLS 策略。</p><a class="btn" href="https://lucy2025-creator.github.io/math-analysis-quiz/#/account">去数学站登录 →</a></div>';
+    var c = cloud();
+    var head = '<div class="page-head"><div><h1>账号与云同步</h1><div class="sub">与数学站共用同一个 Supabase 账号 · 英语答题/作文/译文跨设备同步</div></div></div>';
+    if (!c || !c.ready) {
+      return head + '<div class="cet-card account-box"><h2>云同步未配置</h2><p>当前缺少 Supabase 配置，英语站只保存在本机。补上 publishable key 后即可登录。</p></div>';
+    }
+    if (c.user) {
+      return head + '<div class="cet-card account-box"><h2>已登录</h2><p><b>' + esc(c.user.email) + '</b></p>' +
+        '<p class="tiny muted">本机记录会在登录后与云端合并；之后每次答题、保存作文/译文都会自动推送。</p>' +
+        '<div class="exam-actions"><button class="btn primary" data-account="push">立即上传本机</button><button class="btn" data-account="pull">从云端拉取</button><button class="btn ghost" data-account="logout">退出登录</button></div>' +
+        '<div class="tiny muted" id="syncState" style="margin-top:10px">已连接 Supabase</div></div>';
+    }
+    return head + '<div class="cet-grid"><div class="cet-card"><h2>登录</h2><p class="tiny muted">用数学站同一个邮箱和密码登录。</p>' +
+      '<form data-auth-form="login" class="auth-form"><label>邮箱<input type="email" name="email" required autocomplete="email"></label><label>密码<input type="password" name="password" required autocomplete="current-password"></label><button class="btn primary" type="submit">登录</button></form>' +
+      '<button class="btn sm ghost" data-account="reset" style="margin-top:8px">忘记密码</button><div class="tiny muted" id="authMsg" style="margin-top:8px"></div></div>' +
+      '<div class="cet-card"><h2>注册</h2><p class="tiny muted">没有账号就在这边注册；和数学站是同一个 Supabase 用户体系。</p>' +
+      '<form data-auth-form="signup" class="auth-form"><label>昵称<input name="name" autocomplete="nickname"></label><label>邮箱<input type="email" name="email" required autocomplete="email"></label><label>密码（至少 6 位）<input type="password" name="password" required minlength="6" autocomplete="new-password"></label><button class="btn primary" type="submit">注册</button></form><div class="tiny muted" id="signupMsg" style="margin-top:8px"></div></div></div>';
   }
 
   /* ---------- events ---------- */
@@ -368,7 +412,58 @@
       save(); toast('译文已保存到本机');
       return;
     }
+    if (b.dataset.account) { handleAccount(b.dataset.account); return; }
     if (b.id === 'themeBtn') { toggleTheme(); }
+  });
+
+  async function handleAccount(action) {
+    var c = cloud();
+    if (!c) return;
+    if (action === 'logout') { await c.signOut(); toast('已退出登录'); render(); return; }
+    if (action === 'push') {
+      try { await c.push('cet_state', state); toast('已上传本机记录'); }
+      catch (e) { toast('上传失败：' + (e.message || '网络错误')); }
+      return;
+    }
+    if (action === 'pull') {
+      try {
+        var row = await c.pull('cet_state');
+        if (row && row.data) { state = Object.assign(defaults(), row.data); saveLocal(); render(); toast('已从云端拉取'); }
+        else toast('云端还没有记录');
+      } catch (e) { toast('拉取失败：' + (e.message || '网络错误')); }
+      return;
+    }
+    if (action === 'reset') {
+      var email = prompt('输入注册邮箱，发送重置密码邮件：');
+      if (!email) return;
+      try { await c.reset(email.trim()); toast('重置邮件已发送，请查收'); }
+      catch (e) { toast('发送失败：' + (e.message || '网络错误')); }
+      return;
+    }
+  }
+
+  document.addEventListener('submit', async function (e) {
+    if (!e.target.matches('[data-auth-form]')) return;
+    e.preventDefault();
+    var c = cloud(); if (!c) { toast('云同步未配置'); return; }
+    var f = e.target, type = f.dataset.authForm;
+    var email = (f.querySelector('[name=email]') || {}).value || '';
+    var password = (f.querySelector('[name=password]') || {}).value || '';
+    var name = (f.querySelector('[name=name]') || {}).value || '';
+    try {
+      if (type === 'login') {
+        await c.signIn(email.trim(), password);
+        await pullCloud(); render(); toast('登录成功');
+      } else {
+        var r = await c.signUp(email.trim(), password, name);
+        var msg = $('#signupMsg');
+        if (msg) msg.textContent = r.session ? '注册成功，已登录。' : '注册成功，请查收确认邮件后再登录。';
+        if (r.session) { await pullCloud(); render(); }
+      }
+    } catch (err) {
+      var box = type === 'login' ? $('#authMsg') : $('#signupMsg');
+      if (box) box.textContent = (err.message || '操作失败') + '（请确认邮箱/密码，或检查邮箱确认）';
+    }
   });
 
   function toggleTheme() {
@@ -383,6 +478,17 @@
     var btn = $('#themeBtn'); if (btn) btn.textContent = t === 'dark' ? '☀' : '☾';
   })();
 
+  function initCloud() {
+    var c = cloud();
+    if (!c || !c.ready) return;
+    c.onChange(function (u) {
+      if (u) pullCloud();
+      if (hashRoute().name === 'account') render();
+    });
+    window.addEventListener('online', function () { pullCloud(); });
+  }
+
+  initCloud();
   window.addEventListener('hashchange', render);
   render();
 })();
