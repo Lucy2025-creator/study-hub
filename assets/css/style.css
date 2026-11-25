@@ -157,3 +157,6 @@ p{margin:.55em 0}
   .hero-meta{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .subject-card{padding:19px}
 }
+.subject-card.defa::after{background:rgba(180,85,45,.12)}
+.subject-card.defa .subject-mark{background:#7a4a2a}
+.subject-card.defa .subject-foot{color:#7a4a2a}
