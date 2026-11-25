@@ -259,21 +259,34 @@
       return true;
     });
     function chip(key, val, label, on) {
-      var nq = Object.assign({}, q); if (val) nq[key] = val; else delete nq[key];
+      var nq = Object.assign({}, q); delete nq.page; if (val) nq[key] = val; else delete nq[key];
       var qs = Object.keys(nq).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(nq[k]); }).join('&');
       return '<a class="fchip ' + (on ? 'on' : '') + '" href="#/bank' + (qs ? '?' + qs : '') + '">' + esc(label) + '</a>';
+    }
+    var per = 20;
+    var page = Math.max(1, parseInt(q.page || 1, 10));
+    var pages = Math.max(1, Math.ceil(list.length / per));
+    if (page > pages) page = pages;
+    var paged = list.slice((page - 1) * per, page * per);
+    function pageLink(n) {
+      var nq = Object.assign({}, q); nq.page = String(n);
+      var qs = Object.keys(nq).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(nq[k]); }).join('&');
+      return '<a class="page-btn ' + (n === page ? 'on' : '') + '" href="#/bank?' + qs + '">' + n + '</a>';
     }
     var filters = '<div class="filterbar"><div class="fgroup">' + chip('level', '', '全部', !q.level) + levels.map(function (l) { return chip('level', l, l, q.level === l); }).join('') + '</div>' +
       '<div class="fgroup">' + chip('year', '', '全部年份', !q.year) + years.map(function (y) { return chip('year', String(y), y, String(q.year) === String(y)); }).join('') + '</div>' +
       '<div class="fgroup">' + [['', '全部状态'], ['new', '未做'], ['wrong', '有错题'], ['due', '待复习']].map(function (x) { return chip('status', x[0], x[1], (q.status || '') === x[0]); }).join('') + '</div>' +
       '<form class="searchbox" data-exam-search><input class="input" name="q" value="' + esc(q.q || '') + '" placeholder="搜套卷 / 年份…"><button class="btn sm">搜索</button></form></div>';
-    return '<div class="page-head"><div><h1>题库</h1><div class="sub">' + EXAMS.length + ' 套真题 · 当前 ' + list.length + ' 套 · 四级为主，六级进阶</div></div></div>' + filters +
-      (list.length ? list.map(function (e) {
+    return '<div class="page-head"><div><h1>题库</h1><div class="sub">' + EXAMS.length + ' 套真题 · 当前 ' + list.length + ' 套 · 第 ' + page + '/' + pages + ' 页</div></div></div>' + filters +
+      (paged.length ? paged.map(function (e) {
         var p = examProgress(e), pct = p.total ? Math.round(p.answered * 100 / p.total) : 0;
         return '<div class="exam-card"><div class="exam-main"><div class="meta">' + e.level + ' · ' + e.year + '.' + String(e.month).padStart(2, '0') + ' · 第 ' + e.set + ' 套' + (hasAnswers(e) ? '' : ' · 答案待接入') + '</div><h3>' + esc(e.title) + '</h3><div class="meta">' + esc(e.source) + ' · 已答 ' + p.answered + '/' + p.total + ' · 正确率 ' + (p.answered ? Math.round(p.correct * 100 / p.answered) + '%' : '—') + '</div><div class="ebar"><i style="width:' + pct + '%"></i></div></div>' +
           '<div class="exam-actions"><a class="btn sm" href="#/exam/' + e.id + '?sec=writing">作文</a><a class="btn sm" href="#/exam/' + e.id + '?sec=listening">听力</a><a class="btn sm" href="#/exam/' + e.id + '?sec=reading">阅读</a><a class="btn sm primary" href="#/exam/' + e.id + '">整套</a></div></div>';
       }).join('') : '<div class="empty" style="margin-top:18px"><b>没有符合条件的套卷</b><p class="muted">换个年份或状态试试。</p></div>') +
-      '<div class="tiny muted" style="margin-top:16px">批量真题继续接入中；当前 9 套，后续按年份铺开。</div>';
+      '<div class="pager">' + (page > 1 ? '<a class="page-btn" href="#/bank?' + Object.keys(Object.assign({}, q, {page: String(page - 1)})).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(Object.assign({}, q, {page: String(page - 1)})[k]); }).join('&') + '">‹ 上一页</a>' : '') +
+        Array.from({length: pages}, function (_, i) { return i + 1; }).slice(Math.max(0, page - 3), Math.min(pages, page + 2)).map(pageLink).join('') +
+        (page < pages ? '<a class="page-btn" href="#/bank?' + Object.keys(Object.assign({}, q, {page: String(page + 1)})).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(Object.assign({}, q, {page: String(page + 1)})[k]); }).join('&') + '">下一页 ›</a>' : '') +
+        '</div><div class="tiny muted" style="margin-top:10px">共 ' + EXAMS.length + ' 套 · 四级 2020–2025，六级 2015–2025；2014–2019 四级仍在补。</div>';
   }
 
   function tabs(exam, sec) {
