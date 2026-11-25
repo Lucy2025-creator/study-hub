@@ -232,13 +232,47 @@
         }).join('') + '</div>';
   }
 
-  function viewBank() {
-    return '<div class="page-head"><div><h1>题库</h1><div class="sub">' + EXAMS.length + ' 套真题 · 四级为主，六级进阶</div></div></div>' +
-      EXAMS.map(function (e) {
-        return '<div class="exam-card"><div><div class="meta">' + e.level + ' · ' + e.year + '.' + String(e.month).padStart(2, '0') + ' · 第 ' + e.set + ' 套</div><h3>' + esc(e.title) + '</h3><div class="meta">' + esc(e.source) + '</div></div>' +
-          '<div style="display:flex;gap:6px;flex-wrap:wrap"><a class="btn sm" href="#/exam/' + e.id + '?sec=writing">作文</a><a class="btn sm" href="#/exam/' + e.id + '?sec=listening">听力</a><a class="btn sm" href="#/exam/' + e.id + '?sec=reading">阅读</a><a class="btn sm primary" href="#/exam/' + e.id + '">整套</a></div></div>';
-      }).join('') +
-      '<div class="empty" style="margin-top:18px"><b>批量真题正在接入</b><p class="muted">2014.06–2025.12 的 PDF/音频会按套卷入库；当前先以 2025.06 第一套作为样卷。</p></div>';
+  function examProgress(e) {
+    var keys = allKeys(e), ans = 0, right = 0;
+    keys.forEach(function (k) {
+      if (state.answers[k]) { ans++; if (String(state.answers[k]).toUpperCase() === String(keyAnswer(e, k)).toUpperCase()) right++; }
+    });
+    return { total: keys.length, answered: ans, correct: right };
+  }
+  function examWrong(e) { return allKeys(e).some(function (k) { return !!state.wrong[k]; }); }
+  function viewBank(route) {
+    var q = (route && route.query) || {};
+    var levels = [], years = [];
+    EXAMS.forEach(function (e) { if (levels.indexOf(e.level) < 0) levels.push(e.level); if (years.indexOf(e.year) < 0) years.push(e.year); });
+    years.sort(function (a, b) { return b - a; });
+    var list = EXAMS.filter(function (e) {
+      if (q.level && e.level !== q.level) return false;
+      if (q.year && String(e.year) !== String(q.year)) return false;
+      if (q.status === 'wrong' && !examWrong(e)) return false;
+      if (q.status === 'due' && !allKeys(e).some(function (k) { return state.reviews[k] && state.reviews[k].nextAt && state.reviews[k].nextAt <= Date.now(); })) return false;
+      if (q.status === 'new' && examProgress(e).answered) return false;
+      if (q.q) {
+        var hay = (e.title + ' ' + e.source).toLowerCase();
+        if (hay.indexOf(String(q.q).toLowerCase()) < 0) return false;
+      }
+      return true;
+    });
+    function chip(key, val, label, on) {
+      var nq = Object.assign({}, q); if (val) nq[key] = val; else delete nq[key];
+      var qs = Object.keys(nq).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(nq[k]); }).join('&');
+      return '<a class="fchip ' + (on ? 'on' : '') + '" href="#/bank' + (qs ? '?' + qs : '') + '">' + esc(label) + '</a>';
+    }
+    var filters = '<div class="filterbar"><div class="fgroup">' + chip('level', '', '全部', !q.level) + levels.map(function (l) { return chip('level', l, l, q.level === l); }).join('') + '</div>' +
+      '<div class="fgroup">' + chip('year', '', '全部年份', !q.year) + years.map(function (y) { return chip('year', String(y), y, String(q.year) === String(y)); }).join('') + '</div>' +
+      '<div class="fgroup">' + [['', '全部状态'], ['new', '未做'], ['wrong', '有错题'], ['due', '待复习']].map(function (x) { return chip('status', x[0], x[1], (q.status || '') === x[0]); }).join('') + '</div>' +
+      '<form class="searchbox" data-exam-search><input class="input" name="q" value="' + esc(q.q || '') + '" placeholder="搜套卷 / 年份…"><button class="btn sm">搜索</button></form></div>';
+    return '<div class="page-head"><div><h1>题库</h1><div class="sub">' + EXAMS.length + ' 套真题 · 当前 ' + list.length + ' 套 · 四级为主，六级进阶</div></div></div>' + filters +
+      (list.length ? list.map(function (e) {
+        var p = examProgress(e), pct = p.total ? Math.round(p.answered * 100 / p.total) : 0;
+        return '<div class="exam-card"><div class="exam-main"><div class="meta">' + e.level + ' · ' + e.year + '.' + String(e.month).padStart(2, '0') + ' · 第 ' + e.set + ' 套</div><h3>' + esc(e.title) + '</h3><div class="meta">' + esc(e.source) + ' · 已答 ' + p.answered + '/' + p.total + ' · 正确率 ' + (p.answered ? Math.round(p.correct * 100 / p.answered) + '%' : '—') + '</div><div class="ebar"><i style="width:' + pct + '%"></i></div></div>' +
+          '<div class="exam-actions"><a class="btn sm" href="#/exam/' + e.id + '?sec=writing">作文</a><a class="btn sm" href="#/exam/' + e.id + '?sec=listening">听力</a><a class="btn sm" href="#/exam/' + e.id + '?sec=reading">阅读</a><a class="btn sm primary" href="#/exam/' + e.id + '">整套</a></div></div>';
+      }).join('') : '<div class="empty" style="margin-top:18px"><b>没有符合条件的套卷</b><p class="muted">换个年份或状态试试。</p></div>') +
+      '<div class="tiny muted" style="margin-top:16px">批量真题继续接入中；当前 9 套，后续按年份铺开。</div>';
   }
 
   function tabs(exam, sec) {
@@ -443,7 +477,7 @@
     setNav(route.name);
     var html = '';
     if (route.name === 'home') html = viewHome();
-    else if (route.name === 'bank') html = viewBank();
+    else if (route.name === 'bank') html = viewBank(route);
     else if (route.name === 'exam') html = viewExam(route);
     else if (route.name === 'wrong') html = viewWrong();
     else if (route.name === 'guides') html = viewGuides(route);
@@ -512,6 +546,13 @@
     if (!sel) return;
     var k = sel.getAttribute('data-cause');
     if (state.wrong[k]) { state.wrong[k].cause = sel.value; save(); toast('错因已记下'); }
+  });
+
+  document.addEventListener('submit', function (e) {
+    if (!e.target.matches('[data-exam-search]')) return;
+    e.preventDefault();
+    var val = (e.target.querySelector('input[name=q]') || {}).value || '';
+    navigate('#/bank' + (val.trim() ? '?q=' + encodeURIComponent(val.trim()) : ''));
   });
 
   document.addEventListener('submit', async function (e) {
